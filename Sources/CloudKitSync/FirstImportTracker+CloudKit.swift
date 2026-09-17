@@ -3,11 +3,17 @@
 //  CloudKitSync
 //
 
+import CloudKit
 import Foundation
 import CoreData
 
 extension FirstImportTracker {
     /// Builds a tracker wired to a container's own import notifications.
+    ///
+    /// Assumes signed-in optimistically rather than checking `FileManager.ubiquityIdentityToken`
+    /// up front — that token has been observed to read nil for an already-signed-in watchOS
+    /// account right at cold launch. Instead this confirms the account status asynchronously via
+    /// `CKContainer`, and only corrects the tracker if it actually comes back as no-account.
     @MainActor
     public static func make(
         container: NSPersistentCloudKitContainer,
@@ -16,17 +22,23 @@ extension FirstImportTracker {
         hasDataAlready: Bool,
         onImportFinished: @escaping () -> Void
     ) -> FirstImportTracker {
-        FirstImportTracker(
+        let tracker = FirstImportTracker(
             userDefaults: userDefaults,
             firstImportCompleteKey: firstImportCompleteKey,
             hasDataAlready: hasDataAlready,
-            // Signed out, CloudKit posts no import events at all, so anything waiting on one
-            // would wait forever.
-            isSignedIntoCloud: FileManager.default.ubiquityIdentityToken != nil,
             observeImportEvents: { handler in
                 RemoteChangeObservation.observeImportEvents(container: container, handler)
             },
             onImportFinished: onImportFinished
         )
+
+        CKContainer.default().accountStatus { status, _ in
+            guard status == .noAccount || status == .restricted else { return }
+            Task { @MainActor in
+                tracker.reportNoCloudAccount()
+            }
+        }
+
+        return tracker
     }
 }

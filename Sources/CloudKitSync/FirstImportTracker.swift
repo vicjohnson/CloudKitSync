@@ -127,6 +127,19 @@ public final class FirstImportTracker {
         }
     }
 
+    /// Corrects an optimistic "signed in" assumption once the caller has confirmed — asynchronously,
+    /// via CloudKit's own account status — that there's actually no account to import from. Safe to
+    /// call even after a real import has already completed; `markFirstImportComplete` is a no-op then.
+    ///
+    /// This exists separately from the `isSignedIntoCloud` init parameter because the obvious
+    /// synchronous check (`FileManager.ubiquityIdentityToken`) is not reliable: on watchOS it has
+    /// been observed to read nil for a couple of seconds on an already-signed-in device, right at
+    /// cold launch, while `CKContainer.accountStatus` correctly reports `.available` at the same
+    /// moment. Trusting the token there flashed the empty state before events had a chance to load.
+    public func reportNoCloudAccount() {
+        markFirstImportComplete(persist: false)
+    }
+
     /// - Parameter persist: Pass false when settling for a reason that might not hold next launch —
     ///   no iCloud account, or a failed CloudKit event. Persisting those would mean the syncing
     ///   state never appears again even once the condition clears.
