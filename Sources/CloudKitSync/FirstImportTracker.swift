@@ -141,7 +141,7 @@ public final class FirstImportTracker {
     }
 
     /// - Parameter persist: Pass false when settling for a reason that might not hold next launch —
-    ///   no iCloud account, or a failed CloudKit event. Persisting those would mean the syncing
+    ///   no iCloud account, a failed CloudKit event, or giving up waiting. Persisting those would mean the syncing
     ///   state never appears again even once the condition clears.
     private func markFirstImportComplete(persist: Bool = true) {
         slowSyncTask?.cancel()
@@ -150,13 +150,13 @@ public final class FirstImportTracker {
         maxWaitTask = nil
         syncIsSlow = false
 
-        guard !hasCompletedFirstImport else { return }
-
-        hasCompletedFirstImport = true
-
+        // Persist even if already settled in memory: a timeout or failure may have settled it
+        // unpersisted, and a real import finishing afterwards is what should be remembered.
         if persist {
             userDefaults?.set(true, forKey: firstImportCompleteKey)
         }
+
+        hasCompletedFirstImport = true
     }
 
     private func startSlowSyncTimerIfNeeded() {
@@ -175,6 +175,10 @@ public final class FirstImportTracker {
     /// Backstop for the case `observeImportEvents` misses the finished event it was registered
     /// for (see the init comment) — without this, a missed event leaves `loadState` stuck on
     /// `.syncing` forever with no way to recover short of a relaunch.
+    ///
+    /// Not persisted: an import that's merely slow (watchOS throttles them, and a failed attempt
+    /// backs off for minutes) hasn't finished, so the next launch should still show syncing. A real
+    /// completion arriving later in this launch persists it then.
     private func startMaxWaitTimerIfNeeded() {
         guard !hasCompletedFirstImport else { return }
 
@@ -184,7 +188,7 @@ public final class FirstImportTracker {
 
             guard !Task.isCancelled else { return }
 
-            self.markFirstImportComplete()
+            self.markFirstImportComplete(persist: false)
         }
     }
 }

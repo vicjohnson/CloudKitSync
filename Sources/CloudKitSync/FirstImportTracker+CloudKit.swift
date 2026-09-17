@@ -32,7 +32,14 @@ extension FirstImportTracker {
             onImportFinished: onImportFinished
         )
 
-        CKContainer.default().accountStatus { status, _ in
+        // The container the store actually mirrors to. `CKContainer.default()` is the one named
+        // after the bundle ID, which a target sharing another app's container (a watch app, say)
+        // isn't entitled to, so its status check just errors out.
+        guard let containerIdentifier = container.persistentStoreDescriptions.first?.cloudKitContainerOptions?.containerIdentifier else {
+            return tracker
+        }
+
+        CKContainer(identifier: containerIdentifier).accountStatus { status, _ in
             guard status == .noAccount || status == .restricted else { return }
             Task { @MainActor in
                 tracker.reportNoCloudAccount()
