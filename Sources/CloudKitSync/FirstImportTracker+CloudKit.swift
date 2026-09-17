@@ -19,12 +19,16 @@ extension FirstImportTracker {
         container: NSPersistentCloudKitContainer,
         userDefaults: UserDefaults?,
         firstImportCompleteKey: String,
+        slowSyncThreshold: Duration = .seconds(30),
+        maxImportWait: Duration = .seconds(60),
         hasDataAlready: Bool,
         onImportFinished: @escaping () -> Void
     ) -> FirstImportTracker {
         let tracker = FirstImportTracker(
             userDefaults: userDefaults,
             firstImportCompleteKey: firstImportCompleteKey,
+            slowSyncThreshold: slowSyncThreshold,
+            maxImportWait: maxImportWait,
             hasDataAlready: hasDataAlready,
             observeImportEvents: { handler in
                 RemoteChangeObservation.observeImportEvents(container: container, handler)
