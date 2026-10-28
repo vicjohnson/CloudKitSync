@@ -51,6 +51,51 @@ extension FirstImportTracker {
             }
         }
 
+        probeReachability(containerIdentifier: containerIdentifier)
+
         return tracker
+    }
+
+    // TEMPORARY: diagnoses a stalled `setup` event by talking to CloudKit directly, bypassing
+    // Core Data's mirroring. Remove once the stall is understood.
+    private static func probeReachability(containerIdentifier: String) {
+        let started = Date()
+        let finished = ProbeFlag()
+
+        let database = CKContainer(identifier: containerIdentifier).privateCloudDatabase
+        database.fetchAllRecordZones { zones, error in
+            finished.set()
+            let elapsed = String(format: "%.1f", Date().timeIntervalSince(started))
+            if let error {
+                let nsError = error as NSError
+                print("CloudKitSync: probe failed after \(elapsed)s (\(nsError.domain) \(nsError.code)): \(nsError.localizedDescription) \(nsError.userInfo)")
+            } else {
+                let names = (zones ?? []).map(\.zoneID.zoneName)
+                print("CloudKitSync: probe OK after \(elapsed)s, zones: \(names)")
+            }
+        }
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 20) {
+            if !finished.isSet {
+                print("CloudKitSync: probe got no response after 20s")
+            }
+        }
+    }
+}
+
+private final class ProbeFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func set() {
+        lock.lock()
+        value = true
+        lock.unlock()
     }
 }
