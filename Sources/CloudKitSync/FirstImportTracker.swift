@@ -37,6 +37,7 @@ public final class FirstImportTracker {
     private let slowSyncThreshold: Duration
     private let maxImportWait: Duration
     private let onImportFinished: () -> Void
+    private let log: SyncLog?
 
     private var importEventObserver: NSObjectProtocol?
     private var slowSyncTask: Task<Void, Never>?
@@ -52,6 +53,9 @@ public final class FirstImportTracker {
     ///     so there's nothing to wait for.
     ///   - isSignedIntoCloud: Checked once at init. With no iCloud account there's no import coming
     ///     and no events will ever fire, so waiting for one would hang on "syncing" forever.
+    ///   - log: Optional diagnostics for the tracker's own decisions — events received, and when
+    ///     and why it settled. Pass the same one to whatever `observeImportEvents` wraps to see
+    ///     the raw CloudKit events too.
     ///   - observeImportEvents: Starts observing CloudKit import activity, passing `didFinish` once a
     ///     batch has finished and `failed` when the event carried an error. Retain nothing — the
     ///     tracker owns the returned token.
@@ -65,9 +69,11 @@ public final class FirstImportTracker {
         maxImportWait: Duration = .seconds(60),
         hasDataAlready: Bool,
         isSignedIntoCloud: Bool = true,
+        log: SyncLog? = nil,
         observeImportEvents: (@escaping @MainActor (_ didFinish: Bool, _ failed: Bool) -> Void) -> NSObjectProtocol,
         onImportFinished: @escaping () -> Void
     ) {
+        self.log = log
         self.userDefaults = userDefaults
         self.firstImportCompleteKey = firstImportCompleteKey
         self.slowSyncThreshold = slowSyncThreshold
@@ -101,6 +107,7 @@ public final class FirstImportTracker {
     // MARK: - Private
 
     private func handleImportEvent(didFinish: Bool, failed: Bool) {
+        log?("Tracker saw import event, didFinish: \(didFinish), failed: \(failed)")
         // Any import activity means another batch is either starting or has just
         // finished, so don't settle on a completion we're about to supersede.
         importSettleTask?.cancel()
@@ -144,6 +151,7 @@ public final class FirstImportTracker {
     ///   no iCloud account, a failed CloudKit event, or giving up waiting. Persisting those would mean the syncing
     ///   state never appears again even once the condition clears.
     private func markFirstImportComplete(persist: Bool = true) {
+        log?("First import complete, persisted: \(persist)")
         slowSyncTask?.cancel()
         slowSyncTask = nil
         maxWaitTask?.cancel()
@@ -168,6 +176,7 @@ public final class FirstImportTracker {
 
             guard !Task.isCancelled else { return }
 
+            self.log?("First import is slow, still waiting")
             self.syncIsSlow = true
         }
     }
@@ -188,6 +197,7 @@ public final class FirstImportTracker {
 
             guard !Task.isCancelled else { return }
 
+            self.log?("Gave up waiting for first import after \(self.maxImportWait)")
             self.markFirstImportComplete(persist: false)
         }
     }

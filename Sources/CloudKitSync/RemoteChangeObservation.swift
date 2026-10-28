@@ -33,10 +33,15 @@ public enum RemoteChangeObservation {
     /// `true` once an import has finished. A fresh install can spend a couple of minutes on its
     /// first import, so callers use this to tell "still arriving" apart from "there's nothing".
     /// Retain the returned token for as long as the observation should live.
+    ///
+    /// `log` is told about every CloudKit event (setup, import and export), not just imports —
+    /// useful for seeing where a first sync is stuck.
     public static func observeImportEvents(
         container: NSPersistentCloudKitContainer,
+        log: SyncLog? = nil,
         _ handler: @escaping @MainActor (_ didFinish: Bool, _ failed: Bool) -> Void
     ) -> NSObjectProtocol {
+        log?("Observing CloudKit events")
         return NotificationCenter.default.addObserver(
             forName: NSPersistentCloudKitContainer.eventChangedNotification,
             object: container,
@@ -44,8 +49,11 @@ public enum RemoteChangeObservation {
         ) { notification in
             guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
                     as? NSPersistentCloudKitContainer.Event else {
+                log?("Event notification arrived without an event")
                 return
             }
+
+            log?("\(describe(event.type)) event \(event.endDate == nil ? "started" : "finished"), succeeded: \(event.succeeded), error: \(event.error.map { String(describing: $0) } ?? "none")")
 
             // Any failed event — including a `.setup` failure from a restricted or unavailable
             // container — means the data isn't coming. Report it as finished so callers stop
@@ -67,6 +75,15 @@ public enum RemoteChangeObservation {
             MainActor.assumeIsolated {
                 handler(didFinish, false)
             }
+        }
+    }
+
+    private static func describe(_ type: NSPersistentCloudKitContainer.EventType) -> String {
+        switch type {
+        case .setup: "Setup"
+        case .import: "Import"
+        case .export: "Export"
+        @unknown default: "Unknown (\(type.rawValue))"
         }
     }
 }

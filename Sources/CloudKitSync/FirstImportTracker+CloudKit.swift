@@ -22,6 +22,7 @@ extension FirstImportTracker {
         slowSyncThreshold: Duration = .seconds(30),
         maxImportWait: Duration = .seconds(60),
         hasDataAlready: Bool,
+        log: SyncLog? = nil,
         onImportFinished: @escaping () -> Void
     ) -> FirstImportTracker {
         let tracker = FirstImportTracker(
@@ -30,8 +31,9 @@ extension FirstImportTracker {
             slowSyncThreshold: slowSyncThreshold,
             maxImportWait: maxImportWait,
             hasDataAlready: hasDataAlready,
+            log: log,
             observeImportEvents: { handler in
-                RemoteChangeObservation.observeImportEvents(container: container, handler)
+                RemoteChangeObservation.observeImportEvents(container: container, log: log, handler)
             },
             onImportFinished: onImportFinished
         )
@@ -43,7 +45,8 @@ extension FirstImportTracker {
             return tracker
         }
 
-        CKContainer(identifier: containerIdentifier).accountStatus { status, _ in
+        CKContainer(identifier: containerIdentifier).accountStatus { status, error in
+            log?("Account status for \(containerIdentifier): \(describe(status)), error: \(error.map { String(describing: $0) } ?? "none")")
             guard status == .noAccount || status == .restricted else { return }
             Task { @MainActor in
                 tracker.reportNoCloudAccount()
@@ -51,5 +54,16 @@ extension FirstImportTracker {
         }
 
         return tracker
+    }
+
+    private nonisolated static func describe(_ status: CKAccountStatus) -> String {
+        switch status {
+        case .available: "available"
+        case .noAccount: "noAccount"
+        case .restricted: "restricted"
+        case .couldNotDetermine: "couldNotDetermine"
+        case .temporarilyUnavailable: "temporarilyUnavailable"
+        @unknown default: "unknown (\(status.rawValue))"
+        }
     }
 }

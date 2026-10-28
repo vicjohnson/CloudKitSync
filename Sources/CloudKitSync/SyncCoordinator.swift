@@ -21,6 +21,7 @@ public final class SyncCoordinator {
     private let historyTokenKey: String
     private let transactionAuthor: String
     private let historyRetention: DateComponents
+    private let log: SyncLog?
 
     private var remoteChangeObserver: NSObjectProtocol?
 
@@ -46,8 +47,10 @@ public final class SyncCoordinator {
         historyTokenDefaults: UserDefaults?,
         historyTokenKey: String,
         transactionAuthor: String,
-        historyRetention: DateComponents = DateComponents(day: -7)
+        historyRetention: DateComponents = DateComponents(day: -7),
+        log: SyncLog? = nil
     ) {
+        self.log = log
         self.container = container
         self.entities = entities
         self.historyTokenDefaults = historyTokenDefaults
@@ -217,7 +220,7 @@ public final class SyncCoordinator {
         do {
             try container.viewContext.execute(request)
         } catch {
-            print("Failed to purge persistent history: \(error.localizedDescription)")
+            log?("Failed to purge persistent history: \(error.localizedDescription)")
         }
     }
 }
