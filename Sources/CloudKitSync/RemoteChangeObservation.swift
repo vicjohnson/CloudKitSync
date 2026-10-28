@@ -38,6 +38,7 @@ public enum RemoteChangeObservation {
         container: NSPersistentCloudKitContainer,
         _ handler: @escaping @MainActor (_ didFinish: Bool, _ failed: Bool) -> Void
     ) -> NSObjectProtocol {
+        print("CloudKitSync: observing import events")
         return NotificationCenter.default.addObserver(
             forName: NSPersistentCloudKitContainer.eventChangedNotification,
             object: container,
@@ -45,8 +46,10 @@ public enum RemoteChangeObservation {
         ) { notification in
             guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
                     as? NSPersistentCloudKitContainer.Event else {
+                print("CloudKitSync: event notification without an event")
                 return
             }
+            print("CloudKitSync: \(event.type) event, finished: \(event.endDate != nil), succeeded: \(event.succeeded), error: \(String(describing: event.error))")
 
             // Only an error that won't clear on its own (no account, restricted, misconfigured
             // container) means the data isn't coming. Anything else — network, throttling, a
