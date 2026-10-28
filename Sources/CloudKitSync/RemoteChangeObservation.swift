@@ -3,6 +3,7 @@
 //  CloudKitSync
 //
 
+import CloudKit
 import Foundation
 import CoreData
 
@@ -47,12 +48,15 @@ public enum RemoteChangeObservation {
                 return
             }
 
-            // Any failed event — including a `.setup` failure from a restricted or unavailable
-            // container — means the data isn't coming. Report it as finished so callers stop
-            // waiting on an import that will never arrive.
-            if event.error != nil {
-                MainActor.assumeIsolated {
-                    handler(true, true)
+            // Only an error that won't clear on its own (no account, restricted, misconfigured
+            // container) means the data isn't coming. Anything else — network, throttling, a
+            // zone-setup hiccup — is retried by CloudKit with backoff, so keep waiting rather
+            // than settling on an empty state while the real import is still ahead.
+            if let error = event.error {
+                if isTerminal(error) {
+                    MainActor.assumeIsolated {
+                        handler(true, true)
+                    }
                 }
                 return
             }
@@ -67,6 +71,18 @@ public enum RemoteChangeObservation {
             MainActor.assumeIsolated {
                 handler(didFinish, false)
             }
+        }
+    }
+
+    /// Whether a CloudKit event error will keep failing no matter how many times it's retried.
+    private static func isTerminal(_ error: Error) -> Bool {
+        guard let ckError = error as? CKError else { return false }
+        switch ckError.code {
+        case .notAuthenticated, .permissionFailure, .managedAccountRestricted,
+             .badContainer, .missingEntitlement:
+            return true
+        default:
+            return false
         }
     }
 }

@@ -105,10 +105,13 @@ public final class FirstImportTracker {
         // finished, so don't settle on a completion we're about to supersede.
         importSettleTask?.cancel()
 
-        // A failure means the data isn't coming, so stop waiting — but don't persist it, since
-        // whatever went wrong may well be gone by the next launch.
+        // A terminal failure means the data isn't coming, so stop waiting — but don't persist it,
+        // since whatever went wrong may well be gone by the next launch. `onImportFinished` still
+        // runs: it starts remote-change processing, and without it an import that lands after
+        // the failure would never reach the UI.
         if failed {
             markFirstImportComplete(persist: false)
+            onImportFinished()
             return
         }
 
