@@ -43,7 +43,8 @@ extension FirstImportTracker {
             return tracker
         }
 
-        CKContainer(identifier: containerIdentifier).accountStatus { status, _ in
+        CKContainer(identifier: containerIdentifier).accountStatus { status, error in
+            print("CloudKitSync: account status \(status.rawValue) (0 unknown, 1 available, 2 restricted, 3 noAccount, 4 temporarilyUnavailable), error: \(String(describing: error))")
             guard status == .noAccount || status == .restricted else { return }
             Task { @MainActor in
                 tracker.reportNoCloudAccount()
