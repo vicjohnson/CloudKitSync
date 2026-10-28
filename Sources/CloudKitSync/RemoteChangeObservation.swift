@@ -53,6 +53,8 @@ public enum RemoteChangeObservation {
             // zone-setup hiccup — is retried by CloudKit with backoff, so keep waiting rather
             // than settling on an empty state while the real import is still ahead.
             if let error = event.error {
+                let nsError = error as NSError
+                print("CloudKitSync: \(event.type) event failed (\(nsError.domain) \(nsError.code), terminal: \(isTerminal(error))): \(nsError.localizedDescription) \(nsError.userInfo)")
                 if isTerminal(error) {
                     MainActor.assumeIsolated {
                         handler(true, true)
